@@ -9,10 +9,12 @@ on a large, imbalanced table, and how to serve it when a request is limited to 1
 
 ## What is in the repo
 
-- A fine-tuning loop in plain PyTorch, and a job file to run it on one GPU.
+- Six notebooks that you run in order. They set up the volume, build the feature table, fine-tune the model,
+  evaluate it, deploy the endpoint, and run three scoring scenarios.
+- A fine-tuning loop in plain PyTorch. The fine-tuning and evaluation notebooks run on one GPU, either
+  interactively or as a job.
 - A served model that keeps its context inside the model artifact, so a request carries only a transaction id.
-- Three notebooks that build the feature table, deploy the endpoint, and run three scoring scenarios.
-- A LightGBM baseline on the same split.
+- A LightGBM baseline on the same split, as one step of the evaluation notebook.
 
 ## The data
 
@@ -165,37 +167,54 @@ You need the Databricks CLI and a workspace with these features:
 - GPU Model Serving
 - Lakebase
 
-1. Download `train.csv` and `test.csv` from Kaggle. Upload them to `<volume>/raw/s6e11/`.
-2. Download the small Kumo-Tabular checkpoint from the Hugging Face repo `nvidia/Kumo-Tabular`, revision
-   `v1.0.1`, file `small/classifier.pt`. Upload it to
-   `<volume>/checkpoints/kumo-tabular-v1.0.1/small/classifier.pt`.
-3. Fine-tune. Replace the placeholders in `jobs/finetune.yaml`, then run
-   `databricks air run --file jobs/finetune.yaml`. It takes about 15 minutes on one GPU.
-4. Score the test part with `databricks air run --file jobs/evaluate.yaml`. This also writes a
-   `submission.csv` for Kaggle.
-5. Clone this repo as a Git folder in the workspace and run the notebooks in order.
-   - `01_features_and_online_store` writes the feature table and publishes it to Lakebase.
-   - `02_register_and_serve` logs the model and creates the endpoint. Set the `weights` field to the path of
-     `finetuned.pt`. The first deployment takes about 20 minutes.
-   - `03_scoring_scenarios` runs the three scenarios.
-6. For the LightGBM numbers, run `PYTHONPATH=src python jobs/baseline_lightgbm.py <data_dir>` on a laptop.
+Clone this repo as a Git folder in the workspace and run the notebooks in order. Each notebook takes its
+settings as widgets. Replace the `<catalog>` and `<schema>` placeholders with your own names.
 
-The notebooks run on a serverless notebook. They do not need a GPU or the model library, because the endpoint
-loads the model.
+| Notebook | Compute | What it does |
+|---|---|---|
+| `00_setup` | Serverless | Creates the schema and the volume, and downloads the model checkpoint |
+| `01_features_and_online_store` | Serverless | Writes the feature table and publishes it to Lakebase |
+| `02_finetune` | AI Runtime, one GPU | Fine-tunes the model and saves the best weights |
+| `03_evaluate` | AI Runtime, one GPU | Scores the test part, adds the LightGBM row, writes a Kaggle file |
+| `04_register_and_serve` | Serverless | Logs the model and creates the endpoint |
+| `05_scoring_scenarios` | Serverless | Runs the three scoring scenarios |
+
+1. Run `00_setup`. It downloads the small Kumo-Tabular checkpoint from the Hugging Face repo
+   `nvidia/Kumo-Tabular`, revision `v1.0.1`, file `small/classifier.pt`, to
+   `<volume>/checkpoints/kumo-tabular-v1.0.1/small/classifier.pt`. The Kaggle data needs one manual step,
+   because Kaggle asks you to accept the competition rules first. The notebook stops and tells you to download
+   `train.csv` and `test.csv` from Kaggle and upload them to `<volume>/raw/s6e11/`. Run it again after the
+   upload.
+2. Run `01_features_and_online_store`.
+3. Run `02_finetune`. It takes about 15 minutes on one GPU and writes `finetuned.pt` and `summary.json` to
+   `<volume>/runs/finetune/`.
+4. Run `03_evaluate`. It writes the test table, the fraud share comparison and `submission.csv` to
+   `<volume>/runs/evaluate/`.
+5. Run `04_register_and_serve`. Set the `weights` field to the path of `finetuned.pt`. The first deployment
+   takes about 20 minutes.
+6. Run `05_scoring_scenarios`.
+
+The two GPU notebooks can also run headless. Replace the placeholders in `jobs/finetune.yaml` and
+`jobs/evaluate.yaml`, then run `databricks air run --file jobs/finetune.yaml` and
+`databricks air run --file jobs/evaluate.yaml`. A job runs the notebook file as a plain Python script. Each
+variable in the job file sets the notebook parameter of the same name. On a laptop you can run
+`python notebooks/02_finetune.py` the same way, with the parameters set as environment variables.
+
+The serverless notebooks do not need a GPU or the model library, because the endpoint loads the model.
 
 ## Layout
 
 | Path | Content |
 |---|---|
+| `notebooks/` | The six notebooks, in run order from `00_setup` to `05_scoring_scenarios` |
+| `jobs/` | Job files that run the fine-tuning and evaluation notebooks headless on AI Runtime |
 | `src/kumo_fraud/data.py` | Load the CSV files and split them |
 | `src/kumo_fraud/context.py` | Build contexts with extra fraud and correct the scores |
 | `src/kumo_fraud/scorer.py` | Load the model and score rows against contexts |
 | `src/kumo_fraud/finetune.py` | The fine-tuning loop |
 | `src/kumo_fraud/serving.py` | The served model |
-| `src/kumo_fraud/workspace.py` | Feature tables, model logging, endpoint calls, chunked scoring |
-| `jobs/` | Fine-tuning and evaluation jobs for AI Runtime, and the LightGBM baseline |
-| `notebooks/` | Feature setup, deployment, scoring scenarios |
-| `tests/` | Unit tests. The model tests need the checkpoint and the data on disk |
+| `src/kumo_fraud/workspace.py` | Notebook parameters, feature tables, model logging, endpoint calls, chunked scoring |
+| `tests/` | Unit tests, and a short run of the two GPU notebooks on CPU. The model tests and the notebook run need the checkpoint and the data on disk |
 
 ## Limits
 

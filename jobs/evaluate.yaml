@@ -1,7 +1,9 @@
-# Final test-split comparison of frozen and fine-tuned Kumo-Tabular: one Databricks AI Runtime GPU workload.
-# Replace every <...> placeholder, then submit:
+# Test-split comparison of the released and fine-tuned Kumo-Tabular: notebook 03_evaluate run headless as one
+# Databricks AI Runtime GPU workload. Replace every <...> placeholder, then submit:
 #   databricks air run --file jobs/evaluate.yaml --watch
+#   databricks air run --file jobs/evaluate.yaml --override env_variables.LIGHTGBM=0 --override env_variables.SWEEP=0
 # SUBMISSION: "1" also writes submission.csv for the Kaggle test file.
+# Apart from HF_HOME, every variable below is a parameter of the notebook, in upper case.
 experiment_name: kumo-fraud
 mlflow_experiment_directory: /Workspace/Users/<you>/kumo-fraud
 mlflow_run_name: evaluate
@@ -12,12 +14,13 @@ environment:
   version: databricks_ai_v6
   dependencies:
     - structured-data-models==0.2.1
+    - lightgbm>=4.5
 code_source:
   root_path: ..
   include_paths:
     - src
-    - jobs
-command: PYTHONPATH=$CODE_SOURCE_PATH/src python $CODE_SOURCE_PATH/jobs/evaluate.py
+    - notebooks
+command: PYTHONPATH=$CODE_SOURCE_PATH/src python $CODE_SOURCE_PATH/notebooks/03_evaluate.py
 timeout_minutes: 60
 max_retries: 0
 env_variables:
@@ -27,5 +30,8 @@ env_variables:
   OUT_DIR: /Volumes/<catalog>/<schema>/artifacts/runs/evaluate
   SIZE: small
   POS_FRAC: "0.3"
+  SEED: "0"
   SUBMISSION: "1"
+  LIGHTGBM: "1"
+  SWEEP: "1"
   HF_HOME: /tmp/hf

@@ -77,7 +77,7 @@ display(spark.table(names.label_table).groupBy("split").agg({"is_fraud": "mean",
 # COMMAND ----------
 
 # MAGIC %md Online store (a first create takes several minutes), then a triggered publish. The first sync of about
-# MAGIC a million rows must finish before notebook 3 sends keys-only requests.
+# MAGIC a million rows must finish before notebook 5 sends keys-only requests.
 
 # COMMAND ----------
 

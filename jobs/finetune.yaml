@@ -1,10 +1,11 @@
-# Fine-tune Kumo-Tabular on card fraud: one Databricks AI Runtime GPU workload.
-# Replace every <...> placeholder, upload train.csv and the base checkpoint to the volume, then submit:
+# Fine-tune Kumo-Tabular on card fraud: notebook 02_finetune run headless as one Databricks AI Runtime GPU workload.
+# Run notebook 00_setup first, replace every <...> placeholder, then submit:
 #   databricks air run --file jobs/finetune.yaml --watch
 #   databricks air run --file jobs/finetune.yaml --override env_variables.TRAIN=icl --override env_variables.LR=5e-5
 #   databricks air run --file jobs/finetune.yaml --override env_variables.STEPS=3000 \
 #     --override env_variables.OUT_DIR=/Volumes/<catalog>/<schema>/artifacts/runs/finetune-3000
 # Optional MLflow logging: --override env_variables.MLFLOW_EXPERIMENT=/Users/<you>/kumo-fraud/finetune
+# Apart from HF_HOME, every variable below is a parameter of the notebook, in upper case.
 experiment_name: kumo-fraud
 mlflow_experiment_directory: /Workspace/Users/<you>/kumo-fraud
 mlflow_run_name: finetune
@@ -19,8 +20,8 @@ code_source:
   root_path: ..
   include_paths:
     - src
-    - jobs
-command: PYTHONPATH=$CODE_SOURCE_PATH/src python $CODE_SOURCE_PATH/jobs/finetune.py
+    - notebooks
+command: PYTHONPATH=$CODE_SOURCE_PATH/src python $CODE_SOURCE_PATH/notebooks/02_finetune.py
 timeout_minutes: 120
 max_retries: 0
 env_variables:
@@ -30,8 +31,11 @@ env_variables:
   SIZE: small
   STEPS: "2000"
   LR: "5e-5"
-  POS_FRAC: "0.3"
-  TRAIN: all
   EVAL_EVERY: "250"
+  POS_FRAC: "0.3"
+  K_CHOICES: "512,1024,2048"
+  Q: "1024"
+  TRAIN: all
+  AMP: bf16
   SEED: "0"
   HF_HOME: /tmp/hf

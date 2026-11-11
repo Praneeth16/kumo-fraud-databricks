@@ -1,5 +1,5 @@
-"""Workspace helpers for the notebooks: names, Feature Engineering, model logging, endpoint REST calls and
-chunked scoring. HTTP goes through `do(method, path, body=None)` (`WorkspaceClient().api_client.do` on
+"""Workspace helpers for the notebooks: names, parameters, Feature Engineering, model logging, endpoint REST calls
+and chunked scoring. HTTP goes through `do(method, path, body=None)` (`WorkspaceClient().api_client.do` on
 Databricks) so everything here can be tested with a fake."""
 
 from __future__ import annotations
@@ -39,6 +39,17 @@ class Names:
     online_table = property(lambda self: self._t("transaction_features_online"))
     scores_table = property(lambda self: self._t("batch_scores"))
     model = property(lambda self: self._t("kumo_fraud"))
+
+
+def params(defaults: dict[str, str], dbutils=None) -> dict[str, str]:
+    """Notebook parameters. With `dbutils` (a workspace notebook) every key is a text widget with its default and
+    the widget values are returned. Without it (the notebook run as a script) every key comes from the upper-case
+    environment variable, or else the default."""
+    if dbutils is not None:
+        for key, value in defaults.items():
+            dbutils.widgets.text(key, value)
+        return {key: dbutils.widgets.get(key) for key in defaults}
+    return {key: os.environ.get(key.upper(), value) for key, value in defaults.items()}
 
 
 def csv_columns() -> list[str]:

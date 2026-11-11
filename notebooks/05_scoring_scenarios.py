@@ -1,11 +1,11 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # 3. Three scoring scenarios on one endpoint
+# MAGIC # 5. Three scoring scenarios on one endpoint
 # MAGIC
 # MAGIC (a) real time with keys only, (b) a batch upload scored in chunks with full feature rows, (c) a context
 # MAGIC refresh: newly confirmed fraud labels go into the contexts with no training, as a new model version.
-# MAGIC Needs notebooks 1 and 2. Keep `k`, `members`, `pos_frac`, `late_frauds`, `seed` and `weights` equal to
-# MAGIC notebook 2.
+# MAGIC Needs notebooks 1 and 4. Keep `k`, `members`, `pos_frac`, `late_frauds`, `seed` and `weights` equal to
+# MAGIC notebook 4.
 
 # COMMAND ----------
 
@@ -31,7 +31,7 @@ dbutils.widgets.text("weights", "frozen", "weights: frozen, or a finetuned.pt pa
 dbutils.widgets.text("k", "1024", "context rows per member")
 dbutils.widgets.text("members", "4")
 dbutils.widgets.text("pos_frac", "0.3", "fraud share of each context")
-dbutils.widgets.text("late_frauds", "50", "train frauds held out in notebook 2")
+dbutils.widgets.text("late_frauds", "50", "train frauds held out in notebook 4")
 dbutils.widgets.text("seed", "0")
 dbutils.widgets.text("refresh_version", "v2-refresh", "model_version string of the refreshed model")
 dbutils.widgets.dropdown("workload", "GPU_SMALL", ["GPU_SMALL", "GPU_MEDIUM"])
@@ -121,7 +121,7 @@ display(spark.sql(workspace.ai_query_sql(w("endpoint"), "new_transactions")))
 # COMMAND ----------
 
 # MAGIC %md ## (c) Context refresh: newly confirmed frauds, no training
-# MAGIC The frauds held out in notebook 2 are confirmed now. They go into every context member (the fraud share
+# MAGIC The frauds held out in notebook 4 are confirmed now. They go into every context member (the fraud share
 # MAGIC stays at `pos_frac`, so the prior correction is unchanged), the weights stay as they are, and the result
 # MAGIC is logged as a new version. The endpoint keeps serving the old version until the new one is ready
 # MAGIC (about 20 minutes on GPU).

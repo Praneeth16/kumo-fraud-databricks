@@ -1,12 +1,12 @@
 # Databricks notebook source
 # MAGIC %md
-# MAGIC # 2. Register the model and serve it on a GPU endpoint
+# MAGIC # 4. Register the model and serve it on a GPU endpoint
 # MAGIC
 # MAGIC Builds `members` fraud-enriched contexts of `k` rows from the train split, packs them with the
 # MAGIC Kumo-Tabular weights into a code-based MLflow model, logs it through Feature Engineering (so requests
 # MAGIC carry only `id`), registers it in Unity Catalog with alias `champion` and creates or updates the endpoint.
 # MAGIC
-# MAGIC `late_frauds` train frauds are held out of these contexts; notebook 3 adds them back as newly confirmed
+# MAGIC `late_frauds` train frauds are held out of these contexts; notebook 5 adds them back as newly confirmed
 # MAGIC labels. Needs notebook 1 and the base checkpoint at `<volume>/checkpoints/kumo-tabular-v1.0.1/small/`.
 # MAGIC A first GPU build takes about 20 minutes.
 
@@ -34,7 +34,7 @@ dbutils.widgets.text("weights", "frozen", "weights: frozen, or a finetuned.pt pa
 dbutils.widgets.text("k", "1024", "context rows per member")
 dbutils.widgets.text("members", "4")
 dbutils.widgets.text("pos_frac", "0.3", "fraud share of each context")
-dbutils.widgets.text("late_frauds", "50", "train frauds held out for notebook 3")
+dbutils.widgets.text("late_frauds", "50", "train frauds held out for notebook 5")
 dbutils.widgets.text("seed", "0")
 dbutils.widgets.text("version", "v1", "model_version string in responses")
 dbutils.widgets.dropdown("workload", "GPU_SMALL", ["GPU_SMALL", "GPU_MEDIUM"])
