@@ -1,0 +1,31 @@
+# Final test-split comparison of frozen and fine-tuned Kumo-Tabular: one Databricks AI Runtime GPU workload.
+# Replace every <...> placeholder, then submit:
+#   databricks air run --file jobs/evaluate.yaml --watch
+# SUBMISSION: "1" also writes submission.csv for the Kaggle test file.
+experiment_name: kumo-fraud
+mlflow_experiment_directory: /Workspace/Users/<you>/kumo-fraud
+mlflow_run_name: evaluate
+compute:
+  accelerator_type: GPU_1xH100
+  num_accelerators: 1
+environment:
+  version: databricks_ai_v6
+  dependencies:
+    - structured-data-models==0.2.1
+code_source:
+  root_path: ..
+  include_paths:
+    - src
+    - jobs
+command: PYTHONPATH=$CODE_SOURCE_PATH/src python $CODE_SOURCE_PATH/jobs/evaluate.py
+timeout_minutes: 60
+max_retries: 0
+env_variables:
+  DATA_DIR: /Volumes/<catalog>/<schema>/artifacts/raw/s6e11
+  CHECKPOINT: /Volumes/<catalog>/<schema>/artifacts/checkpoints/kumo-tabular-v1.0.1/small/classifier.pt
+  WEIGHTS: /Volumes/<catalog>/<schema>/artifacts/runs/finetune/finetuned.pt
+  OUT_DIR: /Volumes/<catalog>/<schema>/artifacts/runs/evaluate
+  SIZE: small
+  POS_FRAC: "0.3"
+  SUBMISSION: "1"
+  HF_HOME: /tmp/hf

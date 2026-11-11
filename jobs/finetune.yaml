@@ -28,9 +28,10 @@ env_variables:
   CHECKPOINT: /Volumes/<catalog>/<schema>/artifacts/checkpoints/kumo-tabular-v1.0.1/small/classifier.pt
   OUT_DIR: /Volumes/<catalog>/<schema>/artifacts/runs/finetune
   SIZE: small
-  STEPS: "1000"
-  LR: "2e-5"
+  STEPS: "2000"
+  LR: "5e-5"
   POS_FRAC: "0.3"
   TRAIN: all
+  EVAL_EVERY: "250"
   SEED: "0"
   HF_HOME: /tmp/hf
