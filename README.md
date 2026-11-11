@@ -50,9 +50,53 @@ Three things changed the accuracy.
    rows scores the same as 64 times more context on the released model.
 3. Use more context. The gain is small once the model is fine-tuned.
 
-The fine-tuned model and LightGBM score the same on this data. The reasons to use the in-context model are
-different. You can add newly confirmed frauds to the context without training, and one small cached context
-is enough to serve.
+The fine-tuned model and this LightGBM baseline score the same on our test part. Neither is a strong
+competition entry, as the next section shows. The reasons to use the in-context model are different. You can
+add newly confirmed frauds to the context without training, and one small cached context is enough to serve.
+
+## Kaggle public leaderboard
+
+We submitted four files on 11 November 2026. The leaderboard had 1,466 teams. The top score was 0.95369 and
+the median was 0.94815.
+
+| Submission | Context | Public ROC-AUC |
+|---|---|---|
+| Kumo-Tabular, fine-tuned | 8 contexts of 8,192 rows, 30% fraud | 0.94528 |
+| Kumo-Tabular, as released | 8 contexts of 8,192 rows, 30% fraud | 0.94528 |
+| LightGBM baseline | trained on the train part | 0.94501 |
+| Kumo-Tabular, as released, with a search over contexts | 8 contexts of 1,024 rows | 0.94312 |
+
+- All four scores are below the leaderboard median. The models used 80% of the training file, fixed settings
+  and no feature engineering.
+- Fine-tuning did not change the score at this context size. On our test part the gain at this size was
+  0.001. The gain was larger with one small context, which is the case that helps serving.
+- Kumo-Tabular scored 0.0003 above the LightGBM baseline.
+- The last row uses 8 times fewer context rows than the other Kumo rows, so it is not a like-for-like
+  comparison.
+
+## A search over contexts
+
+We also tried to find good contexts by search. The search keeps many candidate contexts of 1,024 rows. It
+changes a candidate by adding rows that are close to transactions the candidate scores badly, and it keeps the
+candidates that score best on some group of transactions. At the end it picks 8 contexts and their weights.
+The idea comes from the GEPA optimizer. No language model is involved. The code for this experiment is not in
+this repo.
+
+Log-loss on 9,987 held-out transactions, mean of 3 runs, lower is better:
+
+| Method, 8 contexts of 1,024 rows | Random rows | Rows with extra fraud, corrected |
+|---|---|---|
+| 8 random contexts, averaged | 0.0515 | 0.0440 |
+| Pick the best 8 of 1,500 random contexts | 0.0461 | 0.0436 |
+| Search, then pick the best 8 of 1,500 | 0.0451 | 0.0434 |
+
+- With random rows, the search beat picking from random contexts by 0.0010. The 95% interval was 0.0001 to
+  0.0019. The search found the same lever on its own. Its best contexts held 5% to 7% fraud, against 1.7%
+  in the data.
+- The search stopped there. It had no correction for the extra fraud, so more fraud made its scores too high.
+- The plain rule of 30% fraud with the correction did better than the search, with no search at all.
+- On top of that rule, the search gave no further gain. The difference was 0.0002, and the interval included
+  zero.
 
 ## How the fine-tuning works
 
