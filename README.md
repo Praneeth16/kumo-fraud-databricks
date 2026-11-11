@@ -34,9 +34,9 @@ part, which has 69,996 transactions and 1,169 frauds.
 | Kumo-Tabular, as released | 1 context of 1,024 rows, 30% fraud | 0.9388 | 0.463 | 0.0487 |
 | Kumo-Tabular, as released | 8 contexts of 1,024 rows, 30% fraud | 0.9433 | 0.484 | 0.0474 |
 | Kumo-Tabular, as released | 8 contexts of 8,192 rows, 30% fraud | 0.9455 | 0.496 | 0.0464 |
-| Kumo-Tabular, fine-tuned | 1 context of 1,024 rows, 30% fraud | 0.9454 | 0.492 | 0.0466 |
-| Kumo-Tabular, fine-tuned | 8 contexts of 1,024 rows, 30% fraud | 0.9463 | 0.496 | 0.0463 |
-| Kumo-Tabular, fine-tuned | 8 contexts of 8,192 rows, 30% fraud | 0.9466 | 0.498 | 0.0463 |
+| Kumo-Tabular, fine-tuned | 1 context of 1,024 rows, 30% fraud | 0.9458 | 0.495 | 0.0467 |
+| Kumo-Tabular, fine-tuned | 8 contexts of 1,024 rows, 30% fraud | 0.9467 | 0.498 | 0.0463 |
+| Kumo-Tabular, fine-tuned | 8 contexts of 8,192 rows, 30% fraud | 0.9467 | 0.501 | 0.0461 |
 | LightGBM | trained on the whole train part | 0.9466 | 0.499 | 0.0462 |
 
 The model is the small Kumo-Tabular checkpoint with 27.5 million parameters. LightGBM used fixed settings and
@@ -48,9 +48,21 @@ Three things changed the accuracy.
    learn from. A context with 30% fraud raised ROC-AUC from 0.927 to 0.943 at the same size. Such a context
    holds 18 times more fraud than the data, so the raw scores are too high. The code corrects the odds so
    that the scores match the true fraud rate.
-2. Fine-tune the model. About 1,750 steps raised ROC-AUC by 0.001 to 0.007. One fine-tuned context of 1,024
+2. Fine-tune the model. Fine-tuning for 2,000 steps raised ROC-AUC by 0.001 to 0.007. One fine-tuned context of 1,024
    rows scores the same as 64 times more context on the released model.
 3. Use more context. The gain is small once the model is fine-tuned.
+
+The fraud share has a wide useful range. This table is for the released model with 8 contexts of 1,024 rows on
+the validation part. Notebook `03_evaluate` produces it.
+
+| Fraud share of the context | ROC-AUC | PR-AUC | Log-loss |
+|---|---|---|---|
+| 1.7%, as in the data | 0.9251 | 0.434 | 0.0529 |
+| 5% | 0.9347 | 0.475 | 0.0499 |
+| 20% | 0.9400 | 0.498 | 0.0472 |
+| 30% | 0.9398 | 0.492 | 0.0474 |
+| 50% | 0.9400 | 0.490 | 0.0474 |
+| 80% | 0.9400 | 0.486 | 0.0477 |
 
 The fine-tuned model and this LightGBM baseline score the same on our test part. Neither is a strong
 competition entry, as the next section shows. The reasons to use the in-context model are different. You can
@@ -59,7 +71,8 @@ add newly confirmed frauds to the context without training, and one small cached
 ## Kaggle public leaderboard
 
 We submitted four files on 11 November 2026. The leaderboard had 1,466 teams. The top score was 0.95369 and
-the median was 0.94815.
+the median was 0.94815. The fine-tuned file came from an earlier fine-tuning run than the one in the results
+table. The two runs score within 0.001 of each other on our test part.
 
 | Submission | Context | Public ROC-AUC |
 |---|---|---|
@@ -126,8 +139,9 @@ predict come from one distribution, so both are sampled the same way. The correc
 applied only when scoring.
 
 - One step takes 0.26 seconds on an A10 GPU, with contexts of 512 to 2,048 rows and 1,024 rows to predict.
-- Validation ROC-AUC rose until about step 1,750 and fell after step 2,500. The train part has about 9,350
-  frauds and every step reuses many of them. The job keeps the checkpoint with the best validation score.
+- In a run of 5,000 steps, validation ROC-AUC rose until about step 1,750 and fell after step 2,500. The
+  train part has about 9,350 frauds and every step reuses many of them. The notebook stops at 2,000 steps and
+  keeps the checkpoint with the best validation score, which was step 1,250 in our run.
 - A model fine-tuned on contexts with 30% fraud does worse on random contexts than the released model. Serve
   it with the same kind of context it was tuned on.
 
