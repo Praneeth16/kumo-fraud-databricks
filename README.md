@@ -98,6 +98,24 @@ Log-loss on 9,987 held-out transactions, mean of 3 runs, lower is better:
 - On top of that rule, the search gave no further gain. The difference was 0.0002, and the interval included
   zero.
 
+We then gave the search a move that changes the fraud share of a context, with the matching correction. The
+comparison method got the same choice. It draws random contexts at random fraud shares and picks the best 8.
+
+| Method, 8 contexts of 1,024 rows | Log-loss |
+|---|---|
+| 8 random contexts at the best fixed fraud share, averaged | 0.0438 |
+| Pick the best 8 of 1,500 random contexts at random fraud shares | 0.0433 |
+| Search with the fraud share move, then pick the best 8 of 1,500 | 0.0436 |
+
+- The new move improved the search by 0.0015. The comparison method improved by the same amount, and the
+  search no longer beat it.
+- The earlier win of the search came from fraud share, which the comparison method could not change at that
+  point.
+- A fixed fraud share between 26% and 49% gave about the same score. Below 20% and above 80% it was worse.
+
+For this model and this data, the useful finding is the fraud share and its correction. A search is not
+needed to use it.
+
 ## How the fine-tuning works
 
 Each step draws a context and a separate batch of rows to predict. Both come from the train part, and both
