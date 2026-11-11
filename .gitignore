@@ -10,3 +10,5 @@ runs/
 *.parquet
 *.csv
 mlruns/
+build/
+*.egg-info/

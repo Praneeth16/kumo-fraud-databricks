@@ -28,3 +28,20 @@ def correct(p_fraud: np.ndarray, pos_frac: float | None, prior: float) -> np.nda
         return p
     factor = (pos_frac / (1 - pos_frac)) / (prior / (1 - prior))
     return p / (p + factor * (1 - p))
+
+
+def build_contexts(
+    y: np.ndarray, rows: np.ndarray, k: int, pos_frac: float, members: int, seed: int = 0, include=()
+) -> list[np.ndarray]:
+    """`members` enriched contexts of `k` rows from `rows`. The fraud positions `include` go into every member and
+    count toward its `round(k * pos_frac)` frauds, so the fraud share, and with it `correct`, is unchanged."""
+    include = np.unique(np.asarray(include, dtype=np.int64))
+    n_pos, m = round(k * pos_frac), len(include)
+    if m > n_pos or (y[include] != 1).any():
+        raise ValueError(f"include must be at most {n_pos} fraud rows")
+    rng = np.random.default_rng(seed)
+    pool = np.setdiff1d(rows, include)
+    return [
+        np.sort(np.concatenate([include, enriched_context(y, pool, k - m, (n_pos - m) / (k - m), rng)]))
+        for _ in range(members)
+    ]
