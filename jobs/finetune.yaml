@@ -1,0 +1,36 @@
+# Fine-tune Kumo-Tabular on card fraud: one Databricks AI Runtime GPU workload.
+# Replace every <...> placeholder, upload train.csv and the base checkpoint to the volume, then submit:
+#   databricks air run --file jobs/finetune.yaml --watch
+#   databricks air run --file jobs/finetune.yaml --override env_variables.TRAIN=icl --override env_variables.LR=5e-5
+#   databricks air run --file jobs/finetune.yaml --override env_variables.STEPS=3000 \
+#     --override env_variables.OUT_DIR=/Volumes/<catalog>/<schema>/artifacts/runs/finetune-3000
+# Optional MLflow logging: --override env_variables.MLFLOW_EXPERIMENT=/Users/<you>/kumo-fraud/finetune
+experiment_name: kumo-fraud
+mlflow_experiment_directory: /Workspace/Users/<you>/kumo-fraud
+mlflow_run_name: finetune
+compute:
+  accelerator_type: GPU_1xH100
+  num_accelerators: 1
+environment:
+  version: databricks_ai_v6
+  dependencies:
+    - structured-data-models==0.2.1
+code_source:
+  root_path: ..
+  include_paths:
+    - src
+    - jobs
+command: PYTHONPATH=$CODE_SOURCE_PATH/src python $CODE_SOURCE_PATH/jobs/finetune.py
+timeout_minutes: 120
+max_retries: 0
+env_variables:
+  DATA_DIR: /Volumes/<catalog>/<schema>/artifacts/raw/s6e11
+  CHECKPOINT: /Volumes/<catalog>/<schema>/artifacts/checkpoints/kumo-tabular-v1.0.1/small/classifier.pt
+  OUT_DIR: /Volumes/<catalog>/<schema>/artifacts/runs/finetune
+  SIZE: small
+  STEPS: "1000"
+  LR: "2e-5"
+  POS_FRAC: "0.3"
+  TRAIN: all
+  SEED: "0"
+  HF_HOME: /tmp/hf

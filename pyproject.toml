@@ -1,0 +1,41 @@
+[project]
+name = "kumo-fraud"
+version = "0.1.0"
+description = "Fine-tune NVIDIA Kumo-Tabular on Databricks AI Runtime and serve it on GPU Model Serving with Lakebase features: card-fraud scoring in real time and in batch."
+authors = [{ name = "Praneeth Paikray" }]
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "structured-data-models==0.2.1",
+    "torch>=2.7",
+    "numpy>=1.26",
+    "pandas>=2.2",
+    "pyarrow>=16",
+    "scikit-learn>=1.5",
+    "mlflow[databricks]>=3.0",
+    "databricks-sdk>=0.60",
+]
+
+[project.optional-dependencies]
+baseline = ["lightgbm>=4.5"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.8"]
