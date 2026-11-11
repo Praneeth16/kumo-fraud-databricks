@@ -12,13 +12,18 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install -q .. "databricks-feature-engineering>=0.13"
+# MAGIC %pip install -q "databricks-feature-engineering>=0.13"
 
 # COMMAND ----------
 
 dbutils.library.restartPython()
 
 # COMMAND ----------
+
+import os
+import sys
+
+sys.path.insert(0, os.path.abspath("../src"))  # the repo's package, straight from the checked-out folder
 
 dbutils.widgets.text("catalog", "<catalog>")
 dbutils.widgets.text("schema", "<schema>")
@@ -35,7 +40,7 @@ dbutils.widgets.text("version", "v1", "model_version string in responses")
 dbutils.widgets.dropdown("workload", "GPU_SMALL", ["GPU_SMALL", "GPU_MEDIUM"])
 dbutils.widgets.dropdown("scale_to_zero", "false", ["false", "true"])
 dbutils.widgets.text("inference_prefix", "", "inference table prefix (blank: none; never reuse one)")
-dbutils.widgets.text("experiment", "", "MLflow experiment (blank: /Users/<you>/kumo-fraud)")
+dbutils.widgets.text("experiment", "", "MLflow experiment (blank: /Users/<you>/kumo-fraud-serving)")
 
 import tempfile
 
@@ -53,7 +58,7 @@ names = workspace.Names(w("catalog"), w("schema"), w("volume"))
 fe = FeatureEngineeringClient()
 do = WorkspaceClient().api_client.do
 mlflow.set_registry_uri("databricks-uc")
-mlflow.set_experiment(w("experiment") or f"/Users/{spark.sql('SELECT current_user()').first()[0]}/kumo-fraud")
+mlflow.set_experiment(w("experiment") or f"/Users/{spark.sql('SELECT current_user()').first()[0]}/kumo-fraud-serving")
 K, MEMBERS, POS_FRAC, SEED = int(w("k")), int(w("members")), float(w("pos_frac")), int(w("seed"))
 
 # COMMAND ----------
@@ -84,7 +89,6 @@ version = workspace.log_model(
     workspace.training_set(fe, spark, names),
     artifacts,
     names.model,
-    example_ids=frame[data.KEY].iloc[parts["val"][:3]],
     run_name=f"kumo-fraud-{w('version')}",
 )
 mlflow.MlflowClient(registry_uri="databricks-uc").set_registered_model_alias(names.model, "champion", version)

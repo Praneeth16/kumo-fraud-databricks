@@ -11,13 +11,18 @@
 
 # COMMAND ----------
 
-# MAGIC %pip install -q .. "databricks-feature-engineering>=0.13"
+# MAGIC %pip install -q "databricks-feature-engineering>=0.13"
 
 # COMMAND ----------
 
 dbutils.library.restartPython()
 
 # COMMAND ----------
+
+import os
+import sys
+
+sys.path.insert(0, os.path.abspath("../src"))  # the repo's package, straight from the checked-out folder
 
 dbutils.widgets.text("catalog", "<catalog>")
 dbutils.widgets.text("schema", "<schema>")

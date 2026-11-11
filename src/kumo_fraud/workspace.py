@@ -106,11 +106,12 @@ def signature():
     return ModelSignature(inputs=inputs, outputs=outputs)
 
 
-def requirements() -> list[str]:
-    """What the GPU serving container installs. On a T4 (GPU_SMALL) pip resolves torch 2.7.1+cu118."""
+def serving_env() -> dict:
+    """What the GPU serving container installs. Python is pinned because the model library needs 3.11 or newer,
+    whatever the notebook that logs the model runs on. On a T4 (GPU_SMALL) pip resolves torch 2.7.1+cu118."""
     import mlflow
 
-    return [
+    pip = [
         "structured-data-models==0.2.1",
         "torch>=2.7,<2.8",
         "numpy>=1.26",
@@ -118,9 +119,10 @@ def requirements() -> list[str]:
         "pyarrow>=16",
         f"mlflow=={mlflow.__version__}",
     ]
+    return {"name": "kumo-fraud", "channels": ["conda-forge"], "dependencies": ["python=3.12", "pip", {"pip": pip}]}
 
 
-def log_model(fe, train_set, artifacts: dict[str, str], model_name: str, example_ids, run_name: str) -> int:
+def log_model(fe, train_set, artifacts: dict[str, str], model_name: str, run_name: str) -> int:
     """Log `serving.py` as code with the artifacts through Feature Engineering, register it in Unity Catalog and
     return the new version."""
     import mlflow
@@ -136,9 +138,8 @@ def log_model(fe, train_set, artifacts: dict[str, str], model_name: str, example
             registered_model_name=model_name,
             artifacts=artifacts,
             code_paths=[os.path.dirname(serving.__file__)],
-            signature=signature(),
-            input_example=pd.DataFrame({KEY: np.asarray(example_ids, dtype=np.int64)}),
-            pip_requirements=requirements(),
+            signature=signature(),  # no input example: the notebook never loads the model, so it needs no torch
+            conda_env=serving_env(),
         )
     client = mlflow.MlflowClient(registry_uri="databricks-uc")
     versions = client.search_model_versions(f"name='{model_name}'")

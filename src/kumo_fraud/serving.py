@@ -7,6 +7,7 @@ single-estimator fit with view `i`, so the scores equal `Scorer.score` on the sa
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -87,7 +88,16 @@ def export_artifacts(
 
 
 class FraudModel(mlflow.pyfunc.PythonModel):
+    caches = None
+
     def load_context(self, context):
+        """Load weights and fit every context. MLflow also calls this while logging the model; a notebook that
+        logs it needs neither torch nor the model library, so there the load is left for the first predict."""
+        self._context = context
+        if importlib.util.find_spec("sdm") is not None:
+            self._load(context)
+
+    def _load(self, context):
         import sdm
         import torch
 
@@ -138,6 +148,8 @@ class FraudModel(mlflow.pyfunc.PythonModel):
     def predict(self, context, model_input, params=None):
         from kumo_fraud.scorer import encode_features
 
+        if self.caches is None:
+            self._load(self._context)
         frame = normalize(pd.DataFrame(model_input))
         n = len(frame)
         p = np.zeros(n, dtype=np.float64)
