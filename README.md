@@ -166,12 +166,12 @@ Measured on a GPU_SMALL endpoint (one T4):
 
 | Scenario | What happens | Measured |
 |---|---|---|
-| Real time | One id per request, features from Lakebase | p50 269 ms, p95 309 ms, p99 326 ms |
+| Real time | One id per request, features from Lakebase | p50 257 ms, p95 299 ms, p99 301 ms |
 | Batch upload | A CSV lands in a volume and is scored through the same endpoint in chunks | 2,000 rows per request, 1.36 MB per request |
-| Context refresh | Newly confirmed frauds go into the context, a new model version is deployed, no training | Scores of the 8 frauds shown rose by 0.01 to 0.07 |
+| Context refresh | Newly confirmed frauds go into the context, a new model version is deployed, no training | 7 of the 8 frauds shown scored higher, by 0.03 to 0.07. One scored 0.01 lower |
 
 The latency was measured from a serverless notebook in the same region. Scores from a request with ids only
-and from a request with full rows agreed to within 4e-8.
+and from a request with full rows agreed to within 6e-8.
 
 ## Run it
 
@@ -234,6 +234,6 @@ The serverless notebooks do not need a GPU or the model library, because the end
 
 - The data is synthetic. The ranking of methods may differ on real transactions.
 - The transactions have no customer or card key, so the feature lookup is by transaction id.
-- The context refresh raised the scores of the added frauds by a small amount. It does not replace training
+- The context refresh raised the scores of most added frauds by a small amount. It does not replace training
   when fraud patterns change a lot.
 - An endpoint with scale to zero takes several minutes to start after it has been idle.
