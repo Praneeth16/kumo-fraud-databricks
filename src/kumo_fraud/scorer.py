@@ -57,17 +57,21 @@ def fraud_column(pred: sdm.TableTensor) -> torch.Tensor:
     return pred.numerical[..., names.index(1)]
 
 
-def encode_features(frame: pd.DataFrame, device: str = "cpu") -> sdm.TableTensor:
-    return sdm.TableTensor.from_pandas(df=frame[list(STYPES)], stypes=STYPES, device=device)
+def encode_features(frame: pd.DataFrame, device: str = "cpu", extra: tuple[str, ...] = ()) -> sdm.TableTensor:
+    """The 24 raw columns, plus the numeric columns named in `extra` (e.g. fraud-rate features)."""
+    stypes = {**STYPES, **{c: "numerical" for c in extra}}
+    return sdm.TableTensor.from_pandas(df=frame[list(stypes)], stypes=stypes, device=device)
 
 
 class Scorer:
-    """Encodes `frame` once; contexts and queries are row positions into it (or queries from `encode_queries`)."""
+    """Encodes `frame` once; contexts and queries are row positions into it (or queries from `encode_queries`).
+    `extra` names further numeric columns of `frame` that the model should see."""
 
-    def __init__(self, frame: pd.DataFrame, model, device: str = "cpu", autocast: bool = False, query_batch=20_000):
-        self.model, self.device, self.query_batch = model, device, query_batch
+    def __init__(self, frame: pd.DataFrame, model, device: str = "cpu", autocast: bool = False, query_batch=20_000,
+                 extra: tuple[str, ...] = ()):  # fmt: skip
+        self.model, self.device, self.query_batch, self.extra = model, device, query_batch, tuple(extra)
         self.autocast = autocast and torch.device(device).type == "cuda"
-        self.x = encode_features(frame, device)
+        self.x = encode_features(frame, device, self.extra)
         y = sdm.TableTensor.from_pandas(df=frame[[TARGET]], stypes={TARGET: "categorical"}, device=device)
         self.y = y[:, TARGET]
         self.labels = frame[TARGET].to_numpy()
@@ -82,7 +86,7 @@ class Scorer:
 
     def encode_queries(self, frame: pd.DataFrame) -> sdm.TableTensor:
         """Features of rows from another frame (Kaggle test file, a serving request) to pass as `query_rows`."""
-        return encode_features(frame, self.device)
+        return encode_features(frame, self.device, self.extra)
 
     def predict(self, context_rows: np.ndarray, query_rows, view: int = 0) -> np.ndarray:
         """Raw P(fraud) for `query_rows` (positions in the frame, or a table from `encode_queries`) from one

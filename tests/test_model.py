@@ -39,6 +39,22 @@ def test_scorer_is_deterministic_and_encode_queries_matches(setup):
     assert s.shape == (len(q),) and np.isfinite(s).all()
 
 
+def test_scorer_takes_written_text_features_as_extra_columns(setup):
+    from kumo_fraud import features
+
+    frame, parts, scorer = setup
+    text = features.load_written(DATA_DIR).iloc[: len(frame)].reset_index(drop=True)
+    rates = features.encode(features.key_codes(text), scorer.labels, parts["train"])
+    extra = ("rate_amount_usd_frac", "rate_merchant_risk_score_value")
+    wide = Scorer(frame.join(rates[list(extra)]), scorer.model, extra=extra)
+    ctx = enriched_context(scorer.labels, parts["train"], 256, 0.3, np.random.default_rng(0))
+    q = parts["val"][:200]
+    a = wide.predict(ctx, q, view=1)
+    assert ((a > 0) & (a < 1)).all() and not np.allclose(a, scorer.predict(ctx, q, view=1))
+    other = frame.join(rates[list(extra)]).iloc[q].drop(columns=[data.TARGET]).reset_index(drop=True)
+    np.testing.assert_allclose(wide.predict(ctx, wide.encode_queries(other), view=1), a, atol=1e-5)
+
+
 def test_three_finetune_steps_change_weights(setup):
     _, parts, scorer = setup
     net = scorer.model.models["classification"]

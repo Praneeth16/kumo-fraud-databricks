@@ -15,6 +15,8 @@ on a large, imbalanced table, and how to serve it when a request is limited to 1
   interactively or as a job.
 - A served model that keeps its context inside the model artifact, so a request carries only a transaction id.
 - A LightGBM baseline on the same split, as one step of the evaluation notebook.
+- Features built from the written text of each value, as another step of the evaluation notebook. They gave
+  the largest gain in this repo.
 
 ## The data
 
@@ -38,11 +40,16 @@ part, which has 69,996 transactions and 1,169 frauds.
 | Kumo-Tabular, fine-tuned | 8 contexts of 1,024 rows, 30% fraud | 0.9467 | 0.498 | 0.0463 |
 | Kumo-Tabular, fine-tuned | 8 contexts of 8,192 rows, 30% fraud | 0.9467 | 0.501 | 0.0461 |
 | LightGBM | trained on the whole train part | 0.9466 | 0.499 | 0.0462 |
+| Kumo-Tabular, as released, with written-text features | 8 contexts of 1,024 rows, 30% fraud | 0.9471 | 0.496 | 0.0465 |
+| Kumo-Tabular, as released, with written-text features | 8 contexts of 8,192 rows, 30% fraud | 0.9498 | 0.513 | 0.0452 |
+| Kumo-Tabular, fine-tuned, with written-text features | 8 contexts of 1,024 rows, 30% fraud | 0.9460 | 0.490 | 0.0468 |
+| Kumo-Tabular, fine-tuned, with written-text features | 8 contexts of 8,192 rows, 30% fraud | 0.9472 | 0.499 | 0.0462 |
+| LightGBM, with written-text features | trained on the whole train part | 0.9486 | 0.498 | 0.0461 |
 
 The model is the small Kumo-Tabular checkpoint with 27.5 million parameters. LightGBM used fixed settings and
-early stopping. It was not tuned further.
+early stopping. It was not tuned further. The written-text features are explained in the next section.
 
-Three things changed the accuracy.
+Four things changed the accuracy.
 
 1. Put more fraud in the context. A random context of 1,024 rows holds about 17 frauds, which is too few to
    learn from. A context with 30% fraud raised ROC-AUC from 0.927 to 0.943 at the same size. Such a context
@@ -51,6 +58,8 @@ Three things changed the accuracy.
 2. Fine-tune the model. Fine-tuning for 2,000 steps raised ROC-AUC by 0.001 to 0.007. One fine-tuned context of 1,024
    rows scores the same as 64 times more context on the released model.
 3. Use more context. The gain is small once the model is fine-tuned.
+4. Add features from the written text of each value. On the released model with 8 contexts of 8,192 rows,
+   ROC-AUC rose from 0.9455 to 0.9498. This is the best row in the table.
 
 The fraud share has a wide useful range. This table is for the released model with 8 contexts of 1,024 rows on
 the validation part. Notebook `03_evaluate` produces it.
@@ -64,9 +73,37 @@ the validation part. Notebook `03_evaluate` produces it.
 | 50% | 0.9400 | 0.490 | 0.0474 |
 | 80% | 0.9400 | 0.486 | 0.0477 |
 
-The fine-tuned model and this LightGBM baseline score the same on our test part. Neither is a strong
-competition entry, as the next section shows. The reasons to use the in-context model are different. You can
-add newly confirmed frauds to the context without training, and one small cached context is enough to serve.
+On the 24 raw columns, the fine-tuned model and the LightGBM baseline score the same on our test part. The
+reasons to use the in-context model are different. You can add newly confirmed frauds to the context without
+training, and one small cached context is enough to serve.
+
+## Features from the written text
+
+The data is synthetic. A generative model wrote every field as text, and the exact text of a value holds
+signal that a number loses. For example, "250.0" and "250" are the same number and different texts. The
+loader in `data.py` reads numbers as floats, so the model never sees this.
+
+`features.py` reads the columns as text and builds keys from them.
+
+- One key per column is the whole written value.
+- Seven keys per numeric column are digit parts: the text before the decimal point, the text after it, the
+  number of written decimals, the last one and two digits, and the first one and two digits.
+
+Each key becomes one numeric feature. The feature is the fraud rate of the train rows that share the key's
+value, with smoothing. For a row of the train part the rate is computed from the other folds, so the row's
+own label never reaches its feature. Keys with one value on every row, and keys that group rows exactly as
+an earlier key does, are dropped. 71 features remain.
+
+Notebook `03_evaluate` uses the features in two ways.
+
+- LightGBM is trained again with all 71 features. ROC-AUC on the test part rose from 0.9466 to 0.9486.
+- Kumo-Tabular gets the 20 features that LightGBM used most, as extra numeric columns. The contexts are the
+  same as before. For the released model, ROC-AUC rose by 0.0038 with 8 contexts of 1,024 rows and by
+  0.0043 with 8 contexts of 8,192 rows.
+
+The fine-tuned model did not gain. Its ROC-AUC changed by less than 0.001 in either direction. Its weights
+were tuned on the 24 raw columns. Fine-tuning with the new columns is not done in this repo. The served model
+also still uses the 24 raw columns.
 
 ## Kaggle public leaderboard
 
@@ -88,6 +125,25 @@ table. The two runs score within 0.001 of each other on our test part.
 - Kumo-Tabular scored 0.0003 above the LightGBM baseline.
 - The last row uses 8 times fewer context rows than the other Kumo rows, so it is not a like-for-like
   comparison.
+
+We submitted four more files on 12 November 2026, after adding the written-text features. The leaderboard
+then had 1,594 teams. The top score was 0.95385 and the median was 0.94863.
+
+| Submission | Trained on | Public ROC-AUC | Rank |
+|---|---|---|---|
+| Kumo-Tabular, as released, with 20 written-text features, 8 contexts of 8,192 rows | 80% of the training file | 0.94947 | 759 |
+| LightGBM with 4 leaves, raw columns | the whole training file | 0.94771 | 898 |
+| LightGBM with 4 leaves, with written-text features | the whole training file | 0.95100 | 615 |
+| LightGBM with 4 leaves, with written-text features chosen by a script | the whole training file | 0.95127 | 522 |
+
+- The Kumo-Tabular file comes from notebook `03_evaluate`. Its score rose from 0.94528 to 0.94947, and its
+  rank from about 1,350 to 759. The model was not trained. Only its input columns changed.
+- The three LightGBM files come from a separate experiment with small trees, three model seeds and all
+  training rows. That code is not in this repo. The features are the same kind as in `features.py`. They
+  raised the score by 0.0033.
+- In the last row, a short script added and pruned groups of these features with no language model. We also
+  let a language model search for features with the GEPA optimizer. It did not beat this script or random
+  choices of features.
 
 ## A search over contexts
 
@@ -189,7 +245,7 @@ settings as widgets. Replace the `<catalog>` and `<schema>` placeholders with yo
 | `00_setup` | Serverless | Creates the schema and the volume, and downloads the model checkpoint |
 | `01_features_and_online_store` | Serverless | Writes the feature table and publishes it to Lakebase |
 | `02_finetune` | AI Runtime, one GPU | Fine-tunes the model and saves the best weights |
-| `03_evaluate` | AI Runtime, one GPU | Scores the test part, adds the LightGBM row, writes a Kaggle file |
+| `03_evaluate` | AI Runtime, one GPU | Scores the test part, adds the LightGBM rows and the written-text features, writes Kaggle files |
 | `04_register_and_serve` | Serverless | Logs the model and creates the endpoint |
 | `05_scoring_scenarios` | Serverless | Runs the three scoring scenarios |
 
@@ -202,8 +258,8 @@ settings as widgets. Replace the `<catalog>` and `<schema>` placeholders with yo
 2. Run `01_features_and_online_store`.
 3. Run `02_finetune`. It takes about 15 minutes on one GPU and writes `finetuned.pt` and `summary.json` to
    `<volume>/runs/finetune/`.
-4. Run `03_evaluate`. It writes the test table, the fraud share comparison and `submission.csv` to
-   `<volume>/runs/evaluate/`.
+4. Run `03_evaluate`. It writes the test table, the fraud share comparison, `submission.csv` and
+   `submission_written.csv` to `<volume>/runs/evaluate/`.
 5. Run `04_register_and_serve`. Set the `weights` field to the path of `finetuned.pt`. The first deployment
    takes about 20 minutes.
 6. Run `05_scoring_scenarios`.
@@ -224,6 +280,7 @@ The serverless notebooks do not need a GPU or the model library, because the end
 | `jobs/` | Job files that run the fine-tuning and evaluation notebooks headless on AI Runtime |
 | `src/kumo_fraud/data.py` | Load the CSV files and split them |
 | `src/kumo_fraud/context.py` | Build contexts with extra fraud and correct the scores |
+| `src/kumo_fraud/features.py` | Build fraud-rate features from the written text of each value |
 | `src/kumo_fraud/scorer.py` | Load the model and score rows against contexts |
 | `src/kumo_fraud/finetune.py` | The fine-tuning loop |
 | `src/kumo_fraud/serving.py` | The served model |
@@ -233,6 +290,10 @@ The serverless notebooks do not need a GPU or the model library, because the end
 ## Limits
 
 - The data is synthetic. The ranking of methods may differ on real transactions.
+- The written-text features work because a generator wrote the numbers. Do not expect the same gain on real
+  transactions.
+- The serving notebooks and the fine-tuning notebook use the 24 raw columns. To serve the written-text
+  features, the feature table needs the fraud-rate columns and the model needs new contexts.
 - The transactions have no customer or card key, so the feature lookup is by transaction id.
 - The context refresh raised the scores of most added frauds by a small amount. It does not replace training
   when fraud patterns change a lot.

@@ -2,7 +2,8 @@
 # Databricks AI Runtime GPU workload. Replace every <...> placeholder, then submit:
 #   databricks air run --file jobs/evaluate.yaml --watch
 #   databricks air run --file jobs/evaluate.yaml --override env_variables.LIGHTGBM=0 --override env_variables.SWEEP=0
-# SUBMISSION: "1" also writes submission.csv for the Kaggle test file.
+# SUBMISSION: "1" also writes submission.csv for the Kaggle test file. WRITTEN: "1" adds the written-text features
+# (it needs LIGHTGBM: "1").
 # Apart from HF_HOME, every variable below is a parameter of the notebook, in upper case.
 experiment_name: kumo-fraud
 mlflow_experiment_directory: /Workspace/Users/<you>/kumo-fraud
@@ -34,4 +35,6 @@ env_variables:
   SUBMISSION: "1"
   LIGHTGBM: "1"
   SWEEP: "1"
+  WRITTEN: "1"
+  WRITTEN_KEYS: "20"
   HF_HOME: /tmp/hf

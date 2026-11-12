@@ -4,7 +4,8 @@
 # MAGIC
 # MAGIC This notebook scores the test part with the released model and the fine-tuned model. Both models get the
 # MAGIC same contexts, so the comparison is paired. It then shows how the fraud share of the context changes the
-# MAGIC scores, adds a LightGBM baseline, and writes a `submission.csv` for Kaggle.
+# MAGIC scores, adds a LightGBM baseline, adds features built from the written text of each value, and writes
+# MAGIC submission files for Kaggle.
 # MAGIC
 # MAGIC Run it on AI Runtime with one GPU. It also runs headless with `databricks air run --file jobs/evaluate.yaml`.
 # MAGIC Every parameter can then be set as an environment variable with the same name in upper case. Needs notebook 2.
@@ -54,6 +55,8 @@ P = workspace.params(
         "submission": "1",
         "lightgbm": "1",
         "sweep": "1",
+        "written": "1",
+        "written_keys": "20",
         "val_rows": "all",
         "test_rows": "all",
         "kaggle_rows": "all",
@@ -210,10 +213,71 @@ else:
 # COMMAND ----------
 
 # MAGIC %md
+# MAGIC ## Features from the written text
+# MAGIC
+# MAGIC The data is synthetic, and the exact text of a value carries signal that a float loses. This step builds one
+# MAGIC fraud-rate feature per written value and per digit part of each number (see `kumo_fraud/features.py`). The
+# MAGIC rates are fitted on the train part, and out of fold for the rows of the train part.
+# MAGIC
+# MAGIC LightGBM is trained again with all of these features. Kumo-Tabular gets the `written_keys` features that
+# MAGIC LightGBM used most, on the same contexts as above. The fine-tuned weights were trained on the 24 raw
+# MAGIC columns, so the released model can do better here. The validation part decides which of the two models
+# MAGIC writes the Kaggle file. The cell needs the LightGBM cell above.
+
+# COMMAND ----------
+
+written, rates, top, scorers_w, best_w = None, None, [], {}, None
+if P["written"] != "1" or lightgbm is None:
+    print("Skipped: written is not 1, or the LightGBM cell did not run.")
+else:
+    from kumo_fraud import features
+
+    text = features.load_written(P["data_dir"])
+    if P["submission"] == "1":  # the Kaggle rows get the same features, fitted on the train part
+        text = pd.concat([text, features.load_written(P["data_dir"], "test.csv")], ignore_index=True)
+    labels = np.concatenate([y, np.zeros(len(text) - len(y), dtype=y.dtype)])  # only the train part is read
+    rates = features.encode(features.key_codes(text), labels, parts["train"])
+    del text
+    xw = pd.concat([x, rates.iloc[: len(y)]], axis=1)
+    gbm_w = lgb.LGBMClassifier(n_estimators=5000, learning_rate=0.03, num_leaves=63, min_child_samples=100,
+                               subsample=0.8, subsample_freq=1, colsample_bytree=0.8, verbose=-1)  # fmt: skip
+    gbm_w.fit(xw.iloc[parts["train"]], y[parts["train"]], eval_set=[(xw.iloc[val_rows], y[val_rows])],
+              eval_metric="auc", callbacks=[lgb.early_stopping(150, verbose=False)])  # fmt: skip
+    m = metrics(y[test_rows], gbm_w.predict_proba(xw.iloc[test_rows])[:, 1])
+    results["LightGBM | with written-text features"] = m
+    rows.append({"model": "LightGBM", "context": "with written-text features", **m})
+    print("LightGBM with written-text features", json.dumps(m), flush=True)
+
+    gain = pd.Series(gbm_w.booster_.feature_importance("gain"), index=xw.columns)[rates.columns]
+    top = gain.sort_values(ascending=False).index[: int(P["written_keys"])].tolist()
+    frame_w = pd.concat([frame, rates.iloc[: len(y)][top]], axis=1)
+    for name, scorer in scorers.items():
+        scorers_w[name] = Scorer(frame_w, scorer.model, device=DEVICE, autocast=True, extra=tuple(top))
+        for label in (f"enriched 8 x {SMALL:,}", f"enriched 8 x {LARGE:,}"):
+            share, ctxs = contexts[label]
+            t0 = time.time()
+            m = metrics(y[test_rows], score(scorers_w[name], ctxs, share, test_rows))
+            results[f"{name} + written-text features | {label}"] = m
+            timings[f"{name} + written-text features | {label}"] = round(time.time() - t0, 1)
+            rows.append({"model": f"{name} + written-text features", "context": label, **m})
+            print(name, "+ written-text features", label, json.dumps(m), flush=True)
+    share, ctxs = contexts[f"enriched 8 x {LARGE:,}"]
+    val_auc = {name: metrics(y[val_rows], score(s, ctxs, share, val_rows))["roc_auc"] for name, s in scorers_w.items()}
+    best_w = max(val_auc, key=val_auc.get)
+    print("validation ROC-AUC with written-text features:", json.dumps(val_auc), "-> Kaggle file from", best_w)
+    written = {"keys": len(rates.columns), "used_by_kumo": top, "lightgbm_trees": int(gbm_w.best_iteration_),
+               "validation_roc_auc": val_auc, "submission_model": best_w}  # fmt: skip
+    del xw, frame_w
+    show(pd.DataFrame(rows).round(4))
+
+# COMMAND ----------
+
+# MAGIC %md
 # MAGIC ## Kaggle submission
 # MAGIC
 # MAGIC The fine-tuned model scores `test.csv` with 8 contexts of 8,192 rows. If no fine-tuned weights are given, the
-# MAGIC released model is used.
+# MAGIC released model is used. If the written-text step ran, a second file `submission_written.csv` comes from the
+# MAGIC model that did best on the validation part with those features, on the same contexts.
 
 # COMMAND ----------
 
@@ -228,6 +292,14 @@ if P["submission"] == "1":
     submission = pd.DataFrame({data.KEY: kaggle[data.KEY], data.TARGET: p})
     write("submission.csv", lambda path: submission.to_csv(path, index=False))
     print(f"{name} model, {len(submission):,} rows written to", os.path.join(OUT_DIR, "submission.csv"))
+    if written is not None:
+        extra = rates.iloc[len(y) : len(y) + len(kaggle)][top].reset_index(drop=True)
+        kaggle_w = pd.concat([kaggle.reset_index(drop=True), extra], axis=1)
+        p = score(scorers_w[best_w], ctxs, share, scorers_w[best_w].encode_queries(kaggle_w))
+        submission_w = pd.DataFrame({data.KEY: kaggle[data.KEY], data.TARGET: p})
+        write("submission_written.csv", lambda path: submission_w.to_csv(path, index=False))
+        print(f"{best_w} model with written-text features, {len(submission_w):,} rows written to",
+              os.path.join(OUT_DIR, "submission_written.csv"))  # fmt: skip
 else:
     print("Skipped: submission is not 1.")
 
@@ -249,6 +321,7 @@ summary = {
     "score_seconds": timings,
     "fraud_share_sweep": sweep,
     "lightgbm": lightgbm,
+    "written": written,
     "seconds": round(time.time() - start, 1),
 }
 
